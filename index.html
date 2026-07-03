@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>加古川の天気予報集約</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .status {
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    .status.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    thead {
+      background: #f5f5f5;
+      border-bottom: 2px solid #ddd;
+    }
+    th {
+      padding: 12px;
+      text-align: center;
+      font-weight: 600;
+      color: #333;
+    }
+    td {
+      padding: 10px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+    tr:hover {
+      background: #fafafa;
+    }
+    .date-time {
+      text-align: left;
+      font-weight: 500;
+      color: #333;
+    }
+    .time {
+      color: #666;
+      font-weight: 500;
+    }
+    .weathernews {
+      color: #1976d2;
+    }
+    .jma {
+      color: #388e3c;
+    }
+    .nhk {
+      color: #d32f2f;
+    }
+    .source-header {
+      font-weight: 600;
+      color: white;
+      background: #f5f5f5;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>加古川の天気予報集約</h1>
+    <p class="subtitle">時間別降水量（mm）</p>
+    
+    <div id="status" class="status">読み込み中...</div>
+    
+    <table id="weatherTable">
+      <thead>
+        <tr>
+          <th colspan="2">日時</th>
+          <th colspan="3" class="weathernews">ウェザーニュース</th>
+          <th colspan="3" class="jma">気象協会</th>
+          <th colspan="3" class="nhk">NHK</th>
+        </tr>
+        <tr>
+          <th>日付</th>
+          <th>時刻</th>
+          <th>現在</th>
+          <th>1h前</th>
+          <th>2h前</th>
+          <th>現在</th>
+          <th>1h前</th>
+          <th>2h前</th>
+          <th>現在</th>
+          <th>1h前</th>
+          <th>2h前</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const FIREBASE_DB_URL = 'https://tenki-makaki-default-rtdb.firebaseio.com';
+
+    async function fetchWeatherData() {
+      try {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = '天気データを取得中...';
+
+        // Firebase からデータ取得
+        const url = `${FIREBASE_DB_URL}/weather/weathernews.json`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (!data) {
+          statusEl.className = 'status error';
+          statusEl.textContent = 'データが見つかりません';
+          return;
+        }
+
+        // データを時系列で整形
+        const tableData = [];
+        Object.entries(data).forEach(([date, hourData]) => {
+          Object.entries(hourData || {}).forEach(([hour, values]) => {
+            tableData.push({
+              date: date,
+              hour: hour.padStart(2, '0'),
+              weathernews: {
+                latest: values.latest || 0,
+                '1h_ago': values['1h_ago'] || 0,
+                '2h_ago': values['2h_ago'] || 0
+              },
+              jma: { latest: 0, '1h_ago': 0, '2h_ago': 0 },  // 準備中
+              nhk: { latest: 0, '1h_ago': 0, '2h_ago': 0 }   // 準備中
+            });
+          });
+        });
+
+        // 時系列でソート
+        tableData.sort((a, b) => {
+          const dateA = new Date(`${a.date}T${a.hour}:00`);
+          const dateB = new Date(`${b.date}T${b.hour}:00`);
+          return dateA - dateB;
+        });
+        
+        // 最新24時間のみ
+        const displayData = tableData.slice(-24);
+
+        if (displayData.length === 0) {
+          statusEl.className = 'status error';
+          statusEl.textContent = 'グラフに表示するデータがありません';
+          return;
+        }
+
+        // テーブルを生成
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        displayData.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="date-time">${row.date}</td>
+            <td class="time">${row.hour}:00</td>
+            <td class="weathernews">${row.weathernews.latest}</td>
+            <td class="weathernews">${row.weathernews['1h_ago']}</td>
+            <td class="weathernews">${row.weathernews['2h_ago']}</td>
+            <td class="jma">-</td>
+            <td class="jma">-</td>
+            <td class="jma">-</td>
+            <td class="nhk">-</td>
+            <td class="nhk">-</td>
+            <td class="nhk">-</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        statusEl.textContent = `✅ 最新更新: ${new Date().toLocaleString('ja-JP')} (${displayData.length}時間分のデータ)`;
+      } catch (error) {
+        const statusEl = document.getElementById('status');
+        statusEl.className = 'status error';
+        statusEl.textContent = `❌ エラー: ${error.message}`;
+        console.error('Error:', error);
+      }
+    }
+
+    // ページ読み込み時と毎分リロード
+    fetchWeatherData();
+    setInterval(fetchWeatherData, 60000);
+  </script>
+</body>
+</html>
