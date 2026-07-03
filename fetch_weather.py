@@ -22,13 +22,13 @@ try:
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 1時間ごとの <ul> を取得
+        # 1時間ごとの <ul> を取得（すべて）
         hourly_lists = soup.find_all('ul', id=re.compile(r'wx_\dh?our'))
         
         print(f"見つかった時間単位ブロック数: {len(hourly_lists)}")
         
         # Firebase にデータを保存
-        for idx, ul in enumerate(hourly_lists[:24]):  # 最新24時間のみ
+        for idx, ul in enumerate(hourly_lists):  # すべてのデータを取得
             try:
                 # 各 <ul> の中から rain データを取得
                 rain_li = ul.find('li', class_='rain')
@@ -62,7 +62,7 @@ try:
             except Exception as e:
                 print(f"  [{idx}] エラー: {e}")
         
-        print(f"\n✅ 取得・保存完了")
+        print(f"\n✅ 取得・保存完了（{len(hourly_lists)}時間分）")
     else:
         print(f"❌ ページの取得失敗: {response.status_code}")
         
