@@ -1,0 +1,25 @@
+name: Fetch Weather Data
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # 毎正時（0分）に実行
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  fetch_weather:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install beautifulsoup4 requests pytz
+      
+      - name: Fetch weather data
+        run: python fetch_weather.py
