@@ -27,17 +27,16 @@ try:
         
         print(f"見つかった時間単位ブロック数: {len(hourly_lists)}")
         
-        # すべてのデータを一度に整理
-        all_data = {}
-        
         # Firebase にデータを保存
         for idx, ul in enumerate(hourly_lists):
             try:
-                # 時刻情報を取得
+                # 時刻情報を取得（<p> タグの中身）
                 time_li = ul.find('li', class_='time')
-                time_text = ""
+                time_hour = ""
                 if time_li:
-                    time_text = time_li.get_text(strip=True)
+                    p_tag = time_li.find('p')
+                    if p_tag:
+                        time_hour = p_tag.get_text(strip=True)
                 
                 # 降水量データを取得
                 rain_li = ul.find('li', class_='rain')
@@ -50,7 +49,10 @@ try:
                         match = re.search(r'[\d.]+', text)
                         value = float(match.group()) if match else 0
                 
-                print(f"  [{idx}] 時刻: {time_text}, 降水量: {value} mm")
+                # 時刻を HH:00 形式に変換
+                time_formatted = f"{time_hour}:00" if time_hour else f"{idx:02d}:00"
+                
+                print(f"  [{idx}] 時刻: {time_formatted}, 降水量: {value} mm")
                 
                 # データを保存
                 data = {
@@ -59,10 +61,9 @@ try:
                     "source": "weathernews"
                 }
                 
-                # 時刻情報から日付と時間を抽出して保存
-                if time_text:
-                    firebase_url = f"{FIREBASE_DB_URL}/weather/weathernews/{now_jst.strftime('%Y-%m-%d')}/{time_text}.json"
-                    firebase_response = requests.put(firebase_url, json=data, timeout=10)
+                # Firebase に保存
+                firebase_url = f"{FIREBASE_DB_URL}/weather/weathernews/{now_jst.strftime('%Y-%m-%d')}/{time_formatted}.json"
+                firebase_response = requests.put(firebase_url, json=data, timeout=10)
                             
             except Exception as e:
                 print(f"  [{idx}] エラー: {e}")
