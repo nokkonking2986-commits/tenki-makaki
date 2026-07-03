@@ -21,44 +21,48 @@ try:
     
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
-        rain_elements = soup.find_all('li', class_='rain')
-        rainfall_data = []
         
-        print(f"見つかった rain 要素数: {len(rain_elements)}")
+        # 1時間ごとの <ul> を取得
+        hourly_lists = soup.find_all('ul', id=re.compile(r'wx_\dh?our'))
         
-        for idx, element in enumerate(rain_elements[:3]):
+        print(f"見つかった時間単位ブロック数: {len(hourly_lists)}")
+        
+        # Firebase にデータを保存
+        for idx, ul in enumerate(hourly_lists[:24]):  # 最新24時間のみ
             try:
-                p_tag = element.find('p')
-                if p_tag:
-                    text = p_tag.get_text(strip=True)
-                    match = re.search(r'[\d.]+', text)
-                    if match:
-                        value = float(match.group())
-                    else:
-                        value = 0
-                    rainfall_data.append(value)
-                    print(f"  [{idx}] 降水量: {value} mm")
+                # 各 <ul> の中から rain データを取得
+                rain_li = ul.find('li', class_='rain')
+                
+                if rain_li:
+                    p_tag = rain_li.find('p')
+                    if p_tag:
+                        text = p_tag.get_text(strip=True)
+                        match = re.search(r'[\d.]+', text)
+                        value = float(match.group()) if match else 0
+                        
+                        print(f"  [{idx}] 降水量: {value} mm")
+                        
+                        # 時刻情報を取得（time_li から）
+                        time_li = ul.find('li', class_='time')
+                        if time_li:
+                            time_text = time_li.get_text(strip=True)
+                            print(f"       時刻: {time_text}")
+                            
+                            # Firebase に保存
+                            data = {
+                                "latest": value,
+                                "timestamp": now_jst.isoformat(),
+                                "source": "weathernews",
+                                "time_label": time_text
+                            }
+                            
+                            firebase_url = f"{FIREBASE_DB_URL}/weather/weathernews/{now_jst.strftime('%Y-%m-%d')}/{idx:02d}.json"
+                            firebase_response = requests.put(firebase_url, json=data, timeout=10)
+                            
             except Exception as e:
                 print(f"  [{idx}] エラー: {e}")
-                rainfall_data.append(0)
         
-        if rainfall_data:
-            data = {
-                "latest": rainfall_data[0],
-                "1h_ago": rainfall_data[1] if len(rainfall_data) > 1 else None,
-                "2h_ago": rainfall_data[2] if len(rainfall_data) > 2 else None,
-                "timestamp": now_jst.isoformat(),
-                "source": "weathernews"
-            }
-            
-            firebase_url = f"{FIREBASE_DB_URL}/weather/weathernews/{now_jst.strftime('%Y-%m-%d/%H')}.json"
-            firebase_response = requests.put(firebase_url, json=data, timeout=10)
-            
-            print(f"\n✅ Firebase 保存完了")
-            print(f"   URL: {firebase_url}")
-            print(f"   Data: {json.dumps(data, indent=2, ensure_ascii=False)}")
-        else:
-            print("❌ 降水量データが取得できませんでした")
+        print(f"\n✅ 取得・保存完了")
     else:
         print(f"❌ ページの取得失敗: {response.status_code}")
         
