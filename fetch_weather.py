@@ -23,12 +23,12 @@ try:
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # 1時間ごとの <ul> を取得（すべて）
-        hourly_lists = soup.find_all('ul', id=re.compile(r'wx_\dh?our'))
+        hourly_lists = soup.find_all('ul', id=re.compile(r'wx_.*hour'))
         
         print(f"見つかった時間単位ブロック数: {len(hourly_lists)}")
         
         # Firebase にデータを保存
-        for idx, ul in enumerate(hourly_lists):  # すべてのデータを取得
+        for idx, ul in enumerate(hourly_lists):
             try:
                 # 各 <ul> の中から rain データを取得
                 rain_li = ul.find('li', class_='rain')
